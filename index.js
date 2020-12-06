@@ -53,11 +53,12 @@ class FederationStatsPlugin {
 
           const modules = stats.modules.filter(
             (mod) =>
-              mod.issuerName === "container entry" && exposedFiles.has(mod.name)
+              mod.name.startsWith("consume shared module") &&
+              exposedFiles.has(mod.issuerName)
           );
 
           const chunks = modules.map((mod) => {
-            const exposedAs = exposedFiles.get(mod.name);
+            const exposedAs = exposedFiles.get(mod.issuerName);
             const chunks = mod.chunks.map((chunkId) =>
               stats.chunks.find((chunk) => chunk.id === chunkId)
             );

@@ -65,20 +65,25 @@ class FederationStatsPlugin {
 
             return {
               mod: exposedAs,
-              chunks: chunks.reduce((p, c) => {
-                c.siblings.forEach((s) => {
-                  const chunk = stats.chunks.find((c) => c.id === s);
-                  const isShared = chunk.modules.some(
-                    (m) => m.moduleType === "consume-shared-module"
-                  );
+              chunks: chunks.reduce(
+                (p, c) => {
+                  c.siblings.forEach((s) => {
+                    const chunk = stats.chunks.find((c) => c.id === s);
+                    const isShared = chunk.modules.some(
+                      (m) => m.moduleType === "consume-shared-module"
+                    );
 
-                  if (!isShared) {
-                    chunk.files.forEach((f) => p.push(f));
-                  }
-                });
-                c.files.forEach((f) => p.push(f));
-                return p;
-              }, []),
+                    if (isShared) {
+                      chunk.files.forEach((f) => p.shared.push(f));
+                    } else {
+                      chunk.files.forEach((f) => p.chunks.push(f));
+                    }
+                  });
+                  c.files.forEach((f) => p.push(f));
+                  return p;
+                },
+                { chunks: [], shared: [] }
+              ),
             };
           });
 

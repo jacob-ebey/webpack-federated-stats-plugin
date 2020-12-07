@@ -2,6 +2,143 @@ const webpack = require("webpack");
 
 const PLUGIN_NAME = "FederationStatsPlugin";
 
+/** @typedef {import("./stats").WebpackStats} WebpackStats */
+/** @typedef {import("./stats").WebpackStatsChunk} WebpackStatsChunk */
+/** @typedef {import("./stats").WebpackStatsModule} WebpackStatsModule */
+
+/**
+ *
+ * @param {WebpackStats} stats
+ * @param {string} exposedFile
+ * @returns {WebpackStatsModule[]}
+ */
+function getExposedModules(stats, exposedFile) {
+  return stats.modules.filter((mod) => mod.name.startsWith(exposedFile));
+}
+
+/**
+ *
+ * @param {WebpackStats} stats
+ * @param {WebpackStatsModule} mod
+ * @returns {WebpackStatsChunk[]}
+ */
+function getExposedChunks(stats, mod) {
+  const chunks = stats.chunks.filter((chunk) => {
+    return mod.chunks.some((id) => id === chunk.id);
+  });
+
+  const sharedChunks = chunks
+    .flatMap((chunk) =>
+      chunk.siblings
+        .flatMap((id) => stats.chunks.filter((c) => c.id === id))
+        .filter((c) =>
+          c.modules.some((m) => m.moduleType === "consume-shared-module")
+        )
+        .flatMap((c) =>
+          c.children.flatMap((id) => stats.chunks.filter((c2) => c2.id === id))
+        )
+    )
+    .filter((chunk) =>
+      chunk.parents.some((parent) => chunks.some((c) => c.id === parent))
+    )
+    .map((chunk) => ({
+      chunks: chunk.files.map((f) => `${stats.publicPath}${f}`),
+      provides: chunk.modules.map((mod) => mod.issuer),
+    }));
+
+  return {
+    chunks: chunks.flatMap((chunk) =>
+      chunk.files.map((f) => `${stats.publicPath}${f}`)
+    ),
+    sharedChunks,
+  };
+}
+
+function searchIssuer(mod, check) {
+  if (mod.issuer && check(mod.issuer)) {
+    return true;
+  }
+
+  return mod.modules && mod.modules.some(m => searchIssuer(m, check));
+}
+
+function getIssuers(mod, check) {
+  if (mod.issuer && check(mod.issuer)) {
+    return mod.issuer;
+  }
+
+  return mod.modules && mod.modules.filter(m => searchIssuer(m, check)).map(m => m.issuer);
+}
+
+/**
+ *
+ * @param {WebpackStats} stats
+ * @param {any} federationPlugin
+ */
+function getSharedModules(stats, federationPlugin) {
+  return stats.chunks
+    .filter((chunk) =>
+      stats.entrypoints[federationPlugin._options.name].chunks.some(
+        (id) => chunk.id === id
+      )
+    )
+    .flatMap((chunk) =>
+      chunk.children.flatMap((id) =>
+        stats.chunks.filter(
+          (c) =>
+            c.id === id &&
+            c.files.length > 0 &&
+            c.parents.some(
+              (p) => stats.entrypoints[federationPlugin._options.name].chunks.some(c => c === p)
+            ) &&
+            c.modules.some(
+              (m) => searchIssuer(m, (issuer) => issuer && issuer.startsWith("consume-shared-module"))
+            ))
+        )
+    )
+    .map((chunk) => ({
+      chunks: chunk.files.map((f) => `${stats.publicPath}${f}`),
+      provides: chunk.modules
+        .filter((m) => searchIssuer(m, (issuer) => issuer && issuer.startsWith("consume-shared-module")))
+        .flatMap((m) => getIssuers(m, (issuer) => issuer && issuer.startsWith("consume-shared-module"))),
+    }));
+}
+
+function getFederationStats(stats, federationPlugin) {
+  const exposedModules = Object.entries(
+    federationPlugin._options.exposes
+  ).reduce((exposedModules, [exposedAs, exposedFile]) => {
+    return Object.assign(exposedModules, {
+      [exposedAs]: getExposedModules(stats, exposedFile),
+    });
+  }, {});
+
+  const exposes = Object.entries(exposedModules).reduce(
+    (exposedChunks, [exposedAs, exposedModules]) => {
+      return Object.assign(exposedChunks, {
+        [exposedAs]: exposedModules.flatMap((mod) => {
+          return getExposedChunks(stats, mod);
+        }),
+      });
+    },
+    {}
+  );
+
+  const remote =
+    (federationPlugin._options.library &&
+      federationPlugin._options.library.name) ||
+    federationPlugin._options.name;
+
+  const sharedModules = getSharedModules(stats, federationPlugin);
+
+  return {
+    remote,
+    entry: `${stats.publicPath}${federationPlugin._options.filename}`,
+    sharedModules,
+    exposes,
+  };
+}
+
 /**
  * @typedef {object} FederationStatsPluginOptions
  * @property {string} filename The filename in the `output.path` directory to write stats to.
@@ -28,19 +165,15 @@ class FederationStatsPlugin {
    * @param {import("webpack").Compiler} compiler
    */
   apply(compiler) {
-    const federationPlugin =
+    const federationPlugins =
       compiler.options.plugins &&
-      compiler.options.plugins.find(
+      compiler.options.plugins.filter(
         (plugin) => plugin.constructor.name === "ModuleFederationPlugin"
       );
 
-    if (!federationPlugin) {
-      throw new Error("No ModuleFederationPlugin found.");
+    if (!federationPlugins || federationPlugins.length === 0) {
+      throw new Error("No ModuleFederationPlugin(s) found.");
     }
-
-    const exposedFiles = new Map(
-      Object.entries(federationPlugin._options.exposes).map(([k, v]) => [v, k])
-    );
 
     compiler.hooks.thisCompilation.tap(PLUGIN_NAME, (compilation) => {
       compilation.hooks.processAssets.tapPromise(
@@ -51,55 +184,12 @@ class FederationStatsPlugin {
         async () => {
           const stats = compilation.getStats().toJson({});
 
-          const modules = stats.modules.filter(
-            (mod) =>
-              mod.name.startsWith("consume shared module") &&
-              exposedFiles.has(mod.issuerName)
+          const federationStats = federationPlugins.map((federationPlugin) =>
+            getFederationStats(stats, federationPlugin)
           );
-
-          const chunks = modules.map((mod) => {
-            const exposedAs = exposedFiles.get(mod.issuerName);
-            const chunks = mod.chunks.map((chunkId) =>
-              stats.chunks.find((chunk) => chunk.id === chunkId)
-            );
-
-            return {
-              mod: exposedAs,
-              chunks: chunks.reduce(
-                (p, c) => {
-                  c.siblings.forEach((s) => {
-                    const chunk = stats.chunks.find((c) => c.id === s);
-                    const isShared = chunk.modules.some(
-                      (m) => m.moduleType === "consume-shared-module"
-                    );
-
-                    if (isShared) {
-                      chunk.files.forEach((f) => p.shared.push(f));
-                    } else {
-                      chunk.files.forEach((f) => p.chunks.push(f));
-                    }
-                  });
-                  c.files.forEach((f) => p.push(f));
-                  return p;
-                },
-                { chunks: [], shared: [] }
-              ),
-            };
-          });
-
-          const exposes = chunks.reduce(
-            (p, c) => Object.assign(p, { [c.mod]: c.chunks }),
-            {}
-          );
-
-          const remote =
-            (federationPlugin._options.library &&
-              federationPlugin._options.library.name) ||
-            federationPlugin._options.name;
 
           const statsResult = {
-            remote,
-            exposes,
+            federationStats,
           };
 
           const statsJson = JSON.stringify(statsResult);

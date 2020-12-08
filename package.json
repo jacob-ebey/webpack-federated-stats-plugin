@@ -1,6 +1,6 @@
 {
   "name": "webpack-federated-stats-plugin",
-  "version": "2.0.0-beta.2",
+  "version": "2.0.0-beta.3",
   "description": "Write out relevant federation stats to a file for further consumption.",
   "main": "index.js",
   "scripts": {

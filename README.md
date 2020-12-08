@@ -28,9 +28,157 @@ module.exports = {
 
 ```json
 {
-  "remote": "abtests",
-  "exposes": {
-    "./AppShell": ["src_components_app-shell_js.js"]
-  }
+  "sharedModules": [
+    {
+      "chunks": [
+        "http://localhost:5000/client-bundle/node_modules_preact_hooks_dist_hooks_module_js-_41171.js"
+      ],
+      "provides": [
+        {
+          "shareScope": "default",
+          "shareKey": "preact/hooks",
+          "requiredVersion": "^10.5.7",
+          "strictVersion": true,
+          "singleton": false,
+          "eager": false
+        }
+      ]
+    },
+    {
+      "chunks": [
+        "http://localhost:5000/client-bundle/vendors-node_modules_preact_dist_preact_module_js.js"
+      ],
+      "provides": [
+        {
+          "shareScope": "default",
+          "shareKey": "preact",
+          "requiredVersion": "^10.5.7",
+          "strictVersion": true,
+          "singleton": false,
+          "eager": false
+        }
+      ]
+    },
+    {
+      "chunks": [
+        "http://localhost:5000/client-bundle/vendors-node_modules_universal-router_sync_module_js.js"
+      ],
+      "provides": [
+        {
+          "shareScope": "default",
+          "shareKey": "universal-router/sync",
+          "requiredVersion": "^9.0.1",
+          "strictVersion": true,
+          "singleton": false,
+          "eager": false
+        }
+      ]
+    }
+  ],
+  "federatedModules": [
+    {
+      "remote": "preactFrameworkExample",
+      "entry": "http://localhost:5000/client-bundle/routes.js",
+      "sharedModules": [
+        {
+          "chunks": [
+            "http://localhost:5000/client-bundle/node_modules_preact_hooks_dist_hooks_module_js-_41171.js"
+          ],
+          "provides": [
+            {
+              "shareScope": "default",
+              "shareKey": "preact/hooks",
+              "requiredVersion": "^10.5.7",
+              "strictVersion": true,
+              "singleton": false,
+              "eager": false
+            }
+          ]
+        },
+        {
+          "chunks": [
+            "http://localhost:5000/client-bundle/vendors-node_modules_preact_dist_preact_module_js.js"
+          ],
+          "provides": [
+            {
+              "shareScope": "default",
+              "shareKey": "preact",
+              "requiredVersion": "^10.5.7",
+              "strictVersion": true,
+              "singleton": false,
+              "eager": false
+            }
+          ]
+        },
+        {
+          "chunks": [
+            "http://localhost:5000/client-bundle/vendors-node_modules_universal-router_sync_module_js.js"
+          ],
+          "provides": [
+            {
+              "shareScope": "default",
+              "shareKey": "universal-router/sync",
+              "requiredVersion": "^9.0.1",
+              "strictVersion": true,
+              "singleton": false,
+              "eager": false
+            }
+          ]
+        }
+      ],
+      "exposes": {
+        "./src/routes/About.tsx": [
+          {
+            "chunks": [
+              "http://localhost:5000/client-bundle/src_routes_About_tsx.css",
+              "http://localhost:5000/client-bundle/src_routes_About_tsx.js"
+            ],
+            "sharedChunks": [
+              {
+                "chunks": [
+                  "http://localhost:5000/client-bundle/vendors-node_modules_preact_dist_preact_module_js.js"
+                ],
+                "provides": [
+                  {
+                    "shareScope": "default",
+                    "shareKey": "preact",
+                    "requiredVersion": "^10.5.7",
+                    "strictVersion": true,
+                    "singleton": false,
+                    "eager": false
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "./src/routes/Home.tsx": [
+          {
+            "chunks": [
+              "http://localhost:5000/client-bundle/src_routes_Home_tsx.css",
+              "http://localhost:5000/client-bundle/src_routes_Home_tsx.js"
+            ],
+            "sharedChunks": [
+              {
+                "chunks": [
+                  "http://localhost:5000/client-bundle/vendors-node_modules_preact_dist_preact_module_js.js"
+                ],
+                "provides": [
+                  {
+                    "shareScope": "default",
+                    "shareKey": "preact",
+                    "requiredVersion": "^10.5.7",
+                    "strictVersion": true,
+                    "singleton": false,
+                    "eager": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }
 ```

@@ -43,7 +43,7 @@ function getExposedChunks(stats, mod) {
     )
     .map((chunk) => ({
       chunks: chunk.files.map((f) => `${stats.publicPath}${f}`),
-      provides: chunk.modules.map((mod) => mod.issuer),
+      provides: chunk.modules.map((mod) => parseFederatedIssuer(mod.issuer)),
     }));
 
   return {
@@ -59,7 +59,7 @@ function searchIssuer(mod, check) {
     return true;
   }
 
-  return mod.modules && mod.modules.some(m => searchIssuer(m, check));
+  return mod.modules && mod.modules.some((m) => searchIssuer(m, check));
 }
 
 function getIssuers(mod, check) {
@@ -67,7 +67,38 @@ function getIssuers(mod, check) {
     return mod.issuer;
   }
 
-  return mod.modules && mod.modules.filter(m => searchIssuer(m, check)).map(m => m.issuer);
+  return (
+    mod.modules &&
+    mod.modules.filter((m) => searchIssuer(m, check)).map((m) => m.issuer)
+  );
+}
+
+function parseFederatedIssuer(issuer) {
+  const split = issuer.split("|");
+  if (split.length !== 8) {
+    throw new Error(
+      "Invalid issuer length. Webpack might have changed the format. This is hakey to begin with and a better way of getting this info needs to be worked out."
+    );
+  }
+  const [
+    _,
+    shareScope,
+    shareKey,
+    requiredVersion,
+    strictVersion,
+    __,
+    singleton,
+    eager,
+  ] = split;
+
+  return {
+    shareScope,
+    shareKey,
+    requiredVersion,
+    strictVersion: JSON.parse(strictVersion),
+    singleton: JSON.parse(singleton),
+    eager: JSON.parse(eager),
+  };
 }
 
 /**
@@ -88,19 +119,75 @@ function getSharedModules(stats, federationPlugin) {
           (c) =>
             c.id === id &&
             c.files.length > 0 &&
-            c.parents.some(
-              (p) => stats.entrypoints[federationPlugin._options.name].chunks.some(c => c === p)
+            c.parents.some((p) =>
+              stats.entrypoints[federationPlugin._options.name].chunks.some(
+                (c) => c === p
+              )
             ) &&
-            c.modules.some(
-              (m) => searchIssuer(m, (issuer) => issuer && issuer.startsWith("consume-shared-module"))
-            ))
+            c.modules.some((m) =>
+              searchIssuer(
+                m,
+                (issuer) => issuer && issuer.startsWith("consume-shared-module")
+              )
+            )
         )
+      )
     )
     .map((chunk) => ({
       chunks: chunk.files.map((f) => `${stats.publicPath}${f}`),
       provides: chunk.modules
-        .filter((m) => searchIssuer(m, (issuer) => issuer && issuer.startsWith("consume-shared-module")))
-        .flatMap((m) => getIssuers(m, (issuer) => issuer && issuer.startsWith("consume-shared-module"))),
+        .filter((m) =>
+          searchIssuer(
+            m,
+            (issuer) => issuer && issuer.startsWith("consume-shared-module")
+          )
+        )
+        .flatMap((m) =>
+          getIssuers(
+            m,
+            (issuer) => issuer && issuer.startsWith("consume-shared-module")
+          )
+        ),
+    }));
+}
+
+function getMainSharedModules(stats) {
+  const chunks = stats.namedChunkGroups["main"].chunks.flatMap((c) =>
+    stats.chunks.filter((chunk) => chunk.id === c)
+  );
+
+  return chunks
+    .flatMap((chunk) =>
+      chunk.children.flatMap((id) =>
+        stats.chunks.filter(
+          (c) =>
+            c.id === id &&
+            c.files.length > 0 &&
+            c.modules.some((m) =>
+              searchIssuer(
+                m,
+                (issuer) => issuer && issuer.startsWith("consume-shared-module")
+              )
+            )
+        )
+      )
+    )
+    .map((chunk) => ({
+      chunks: chunk.files.map((f) => `${stats.publicPath}${f}`),
+      provides: chunk.modules
+        .filter((m) =>
+          searchIssuer(
+            m,
+            (issuer) => issuer && issuer.startsWith("consume-shared-module")
+          )
+        )
+        .flatMap((m) =>
+          getIssuers(
+            m,
+            (issuer) => issuer && issuer.startsWith("consume-shared-module")
+          )
+        )
+        .map(parseFederatedIssuer),
     }));
 }
 
@@ -184,12 +271,15 @@ class FederationStatsPlugin {
         async () => {
           const stats = compilation.getStats().toJson({});
 
-          const federationStats = federationPlugins.map((federationPlugin) =>
+          const federatedModules = federationPlugins.map((federationPlugin) =>
             getFederationStats(stats, federationPlugin)
           );
 
+          const sharedModules = getMainSharedModules(stats);
+
           const statsResult = {
-            federationStats,
+            sharedModules,
+            federatedModules,
           };
 
           const statsJson = JSON.stringify(statsResult);

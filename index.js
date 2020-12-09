@@ -79,7 +79,7 @@ function getExposed(stats, mod) {
     )
     .map((chunk) => ({
       chunks: chunk.files.map((f) => `${stats.publicPath}${f}`),
-      provides: chunk.modules.map((mod) => parseFederatedIssuer(mod.issuer)),
+      provides: chunk.modules.map((mod) => parseFederatedIssuer(mod.issuer)).filter(f => !!f),
     }));
 
   return {
@@ -127,10 +127,8 @@ function getIssuers(mod, check) {
  */
 function parseFederatedIssuer(issuer) {
   const split = issuer.split("|");
-  if (split.length !== 8) {
-    throw new Error(
-      "Invalid issuer length. Webpack might have changed the format. This is hakey to begin with and a better way of getting this info needs to be worked out."
-    );
+  if (split.length !== 8 || split[0] !== "consume-shared-module") {
+    return null;
   }
   const [
     _,
@@ -201,8 +199,8 @@ function getSharedModules(stats, federationPlugin) {
             (issuer) => issuer && issuer.startsWith("consume-shared-module")
           )
         )
-        .map(parseFederatedIssuer),
-    }));
+        .map(parseFederatedIssuer).filter(f => !!f),
+    })).filter(c => c.provides.length > 0);
 }
 
 /**
@@ -245,8 +243,8 @@ function getMainSharedModules(stats) {
             (issuer) => issuer && issuer.startsWith("consume-shared-module")
           )
         )
-        .map(parseFederatedIssuer),
-    }));
+        .map(parseFederatedIssuer).filter(f => !!f),
+    })).filter(c => c.provides.length > 0);
 }
 
 /**

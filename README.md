@@ -133,7 +133,7 @@ module.exports = {
               "http://localhost:5000/client-bundle/src_routes_About_tsx.css",
               "http://localhost:5000/client-bundle/src_routes_About_tsx.js"
             ],
-            "sharedChunks": [
+            "sharedModules": [
               {
                 "chunks": [
                   "http://localhost:5000/client-bundle/vendors-node_modules_preact_dist_preact_module_js.js"
@@ -158,7 +158,7 @@ module.exports = {
               "http://localhost:5000/client-bundle/src_routes_Home_tsx.css",
               "http://localhost:5000/client-bundle/src_routes_Home_tsx.js"
             ],
-            "sharedChunks": [
+            "sharedModules": [
               {
                 "chunks": [
                   "http://localhost:5000/client-bundle/vendors-node_modules_preact_dist_preact_module_js.js"

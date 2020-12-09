@@ -1,9 +1,3 @@
-// To parse this data:
-//
-//   import { Convert, WebpackStats } from "./file";
-//
-//   const webpackStats = Convert.toWebpackStats(json);
-
 export interface WebpackStats {
   hash: string;
   version: string;

@@ -2,9 +2,45 @@ const webpack = require("webpack");
 
 const PLUGIN_NAME = "FederationStatsPlugin";
 
-/** @typedef {import("./stats").WebpackStats} WebpackStats */
-/** @typedef {import("./stats").WebpackStatsChunk} WebpackStatsChunk */
-/** @typedef {import("./stats").WebpackStatsModule} WebpackStatsModule */
+/** @typedef {import("./webpack-stats-types").WebpackStats} WebpackStats */
+/** @typedef {import("./webpack-stats-types").WebpackStatsChunk} WebpackStatsChunk */
+/** @typedef {import("./webpack-stats-types").WebpackStatsModule} WebpackStatsModule */
+
+/**
+ * @typedef {object} SharedDependency
+ * @property {string} shareScope
+ * @property {string} shareKey
+ * @property {string} requiredVersion
+ * @property {boolean} strictVersion
+ * @property {boolean} singleton
+ * @property {boolean} eager
+ */
+
+/**
+ * @typedef {object} SharedModule
+ * @property {string[]} chunks
+ * @property {SharedDependency[]} provides
+ */
+
+/**
+ * @typedef {object} Exposed
+ * @property {string[]} chunks
+ * @property {SharedModule[]} sharedModules
+ */
+
+/**
+ * @typedef {object} FederatedContainer
+ * @property {string} remote
+ * @property {string} entry
+ * @property {SharedModule[]} sharedModules
+ * @property {{ [key: string]: Exposed }} exposes
+ */
+
+/**
+ * @typedef {object} FederatedStats
+ * @property {SharedModule[]} sharedModules
+ * @property {FederatedContainer[]} federatedContainers
+ */
 
 /**
  *
@@ -20,14 +56,14 @@ function getExposedModules(stats, exposedFile) {
  *
  * @param {WebpackStats} stats
  * @param {WebpackStatsModule} mod
- * @returns {WebpackStatsChunk[]}
+ * @returns {Exposed}
  */
-function getExposedChunks(stats, mod) {
+function getExposed(stats, mod) {
   const chunks = stats.chunks.filter((chunk) => {
     return mod.chunks.some((id) => id === chunk.id);
   });
 
-  const sharedChunks = chunks
+  const sharedModules = chunks
     .flatMap((chunk) =>
       chunk.siblings
         .flatMap((id) => stats.chunks.filter((c) => c.id === id))
@@ -50,29 +86,45 @@ function getExposedChunks(stats, mod) {
     chunks: chunks.flatMap((chunk) =>
       chunk.files.map((f) => `${stats.publicPath}${f}`)
     ),
-    sharedChunks,
+    sharedModules,
   };
 }
 
+/**
+ *
+ * @param {import("webpack").Module} mod
+ * @param {(issuer: string) => boolean} check
+ * @returns {boolean}
+ */
 function searchIssuer(mod, check) {
   if (mod.issuer && check(mod.issuer)) {
     return true;
   }
 
-  return mod.modules && mod.modules.some((m) => searchIssuer(m, check));
+  return !!mod.modules && mod.modules.some((m) => searchIssuer(m, check));
 }
 
+/**
+ * @param {import("webpack").Module} mod
+ * @param {(issuer: string) => boolean} check
+ * @returns {string[]}
+ */
 function getIssuers(mod, check) {
   if (mod.issuer && check(mod.issuer)) {
-    return mod.issuer;
+    return [mod.issuer];
   }
 
   return (
-    mod.modules &&
-    mod.modules.filter((m) => searchIssuer(m, check)).map((m) => m.issuer)
+    (mod.modules &&
+      mod.modules.filter((m) => searchIssuer(m, check)).map((m) => m.issuer)) ||
+    []
   );
 }
 
+/**
+ * @param {string} issuer
+ * @returns {SharedDependency}
+ */
 function parseFederatedIssuer(issuer) {
   const split = issuer.split("|");
   if (split.length !== 8) {
@@ -104,7 +156,8 @@ function parseFederatedIssuer(issuer) {
 /**
  *
  * @param {WebpackStats} stats
- * @param {any} federationPlugin
+ * @param {import("webpack").container.ModuleFederationPlugin} federationPlugin
+ * @returns {SharedModule[]}
  */
 function getSharedModules(stats, federationPlugin) {
   return stats.chunks
@@ -147,10 +200,15 @@ function getSharedModules(stats, federationPlugin) {
             m,
             (issuer) => issuer && issuer.startsWith("consume-shared-module")
           )
-        ),
+        )
+        .map(parseFederatedIssuer),
     }));
 }
 
+/**
+ * @param {WebpackStats} stats
+ * @returns {SharedModule[]}
+ */
 function getMainSharedModules(stats) {
   const chunks = stats.namedChunkGroups["main"].chunks.flatMap((c) =>
     stats.chunks.filter((chunk) => chunk.id === c)
@@ -191,6 +249,12 @@ function getMainSharedModules(stats) {
     }));
 }
 
+/**
+ *
+ * @param {WebpackStats} stats
+ * @param {import("webpack").container.ModuleFederationPlugin} federationPlugin
+ * @returns {FederatedStats}
+ */
 function getFederationStats(stats, federationPlugin) {
   const exposedModules = Object.entries(
     federationPlugin._options.exposes
@@ -200,17 +264,19 @@ function getFederationStats(stats, federationPlugin) {
     });
   }, {});
 
+  /** @type {{ [key: string]: Exposed }} */
   const exposes = Object.entries(exposedModules).reduce(
     (exposedChunks, [exposedAs, exposedModules]) => {
       return Object.assign(exposedChunks, {
         [exposedAs]: exposedModules.flatMap((mod) => {
-          return getExposedChunks(stats, mod);
+          return getExposed(stats, mod);
         }),
       });
     },
     {}
   );
 
+  /** @type {string} */
   const remote =
     (federationPlugin._options.library &&
       federationPlugin._options.library.name) ||

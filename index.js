@@ -39,7 +39,7 @@ const PLUGIN_NAME = "FederationStatsPlugin";
 /**
  * @typedef {object} FederatedStats
  * @property {SharedModule[]} sharedModules
- * @property {FederatedContainer[]} federatedContainers
+ * @property {FederatedContainer[]} federatedModules
  */
 
 /**

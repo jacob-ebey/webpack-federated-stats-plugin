@@ -42,6 +42,10 @@ const PLUGIN_NAME = "FederationStatsPlugin";
  * @property {FederatedContainer[]} federatedModules
  */
 
+const concat = (x, y) => x.concat(y);
+
+const flatMap = (xs, f) => xs.map(f).reduce(concat, []);
+
 /**
  *
  * @param {WebpackStats} stats
@@ -63,28 +67,33 @@ function getExposed(stats, mod) {
     return mod.chunks.some((id) => id === chunk.id);
   });
 
-  const sharedModules = chunks
-    .flatMap((chunk) =>
-      chunk.siblings
-        .flatMap((id) => stats.chunks.filter((c) => c.id === id))
-        .filter((c) =>
-          c.modules.some((m) => m.moduleType === "consume-shared-module")
-        )
-        .flatMap((c) =>
-          c.children.flatMap((id) => stats.chunks.filter((c2) => c2.id === id))
-        )
+  const sharedModules = flatMap(chunks, (chunk) =>
+    flatMap(
+      flatMap(chunk.siblings, (id) =>
+        stats.chunks.filter((c) => c.id === id)
+      ).filter((c) =>
+        c.modules.some((m) => m.moduleType === "consume-shared-module")
+      ),
+      (c) =>
+        flatMap(c.children, (id) => stats.chunks.filter((c2) => c2.id === id))
     )
+  )
     .filter((chunk) =>
       chunk.parents.some((parent) => chunks.some((c) => c.id === parent))
     )
     .map((chunk) => ({
-      chunks: chunk.files.map((f) => `${stats.publicPath}${f}`),
-      provides: chunk.modules.map((mod) => parseFederatedIssuer(mod.issuer)).filter(f => !!f),
+      chunks: chunk.files.map(
+        (f) =>
+          `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${f}`
+      ),
+      provides: chunk.modules
+        .map((mod) => parseFederatedIssuer(mod.issuer))
+        .filter((f) => !!f),
     }));
 
   return {
-    chunks: chunks.flatMap((chunk) =>
-      chunk.files.map((f) => `${stats.publicPath}${f}`)
+    chunks: flatMap(chunks, (chunk) =>
+      chunk.files.map((f) => `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${f}`)
     ),
     sharedModules,
   };
@@ -158,14 +167,14 @@ function parseFederatedIssuer(issuer) {
  * @returns {SharedModule[]}
  */
 function getSharedModules(stats, federationPlugin) {
-  return stats.chunks
-    .filter((chunk) =>
+  return flatMap(
+    stats.chunks.filter((chunk) =>
       stats.entrypoints[federationPlugin._options.name].chunks.some(
         (id) => chunk.id === id
       )
-    )
-    .flatMap((chunk) =>
-      chunk.children.flatMap((id) =>
+    ),
+    (chunk) =>
+      flatMap(chunk.children, (id) =>
         stats.chunks.filter(
           (c) =>
             c.id === id &&
@@ -183,24 +192,26 @@ function getSharedModules(stats, federationPlugin) {
             )
         )
       )
-    )
+  )
     .map((chunk) => ({
-      chunks: chunk.files.map((f) => `${stats.publicPath}${f}`),
-      provides: chunk.modules
-        .filter((m) =>
+      chunks: chunk.files.map((f) => `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${f}`),
+      provides: flatMap(
+        chunk.modules.filter((m) =>
           searchIssuer(
             m,
             (issuer) => issuer && issuer.startsWith("consume-shared-module")
           )
-        )
-        .flatMap((m) =>
+        ),
+        (m) =>
           getIssuers(
             m,
             (issuer) => issuer && issuer.startsWith("consume-shared-module")
           )
-        )
-        .map(parseFederatedIssuer).filter(f => !!f),
-    })).filter(c => c.provides.length > 0);
+      )
+        .map(parseFederatedIssuer)
+        .filter((f) => !!f),
+    }))
+    .filter((c) => c.provides.length > 0);
 }
 
 /**
@@ -208,43 +219,46 @@ function getSharedModules(stats, federationPlugin) {
  * @returns {SharedModule[]}
  */
 function getMainSharedModules(stats) {
-  const chunks = stats.namedChunkGroups["main"].chunks.flatMap((c) =>
-    stats.chunks.filter((chunk) => chunk.id === c)
-  );
+  const chunks = stats.namedChunkGroups["main"]
+    ? flatMap(stats.namedChunkGroups["main"].chunks, (c) =>
+        stats.chunks.filter((chunk) => chunk.id === c)
+      )
+    : [];
 
-  return chunks
-    .flatMap((chunk) =>
-      chunk.children.flatMap((id) =>
-        stats.chunks.filter(
-          (c) =>
-            c.id === id &&
-            c.files.length > 0 &&
-            c.modules.some((m) =>
-              searchIssuer(
-                m,
-                (issuer) => issuer && issuer.startsWith("consume-shared-module")
-              )
+  return flatMap(chunks, (chunk) =>
+    flatMap(chunk.children, (id) =>
+      stats.chunks.filter(
+        (c) =>
+          c.id === id &&
+          c.files.length > 0 &&
+          c.modules.some((m) =>
+            searchIssuer(
+              m,
+              (issuer) => issuer && issuer.startsWith("consume-shared-module")
             )
-        )
+          )
       )
     )
+  )
     .map((chunk) => ({
-      chunks: chunk.files.map((f) => `${stats.publicPath}${f}`),
-      provides: chunk.modules
-        .filter((m) =>
+      chunks: chunk.files.map((f) => `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${f}`),
+      provides: flatMap(
+        chunk.modules.filter((m) =>
           searchIssuer(
             m,
             (issuer) => issuer && issuer.startsWith("consume-shared-module")
           )
-        )
-        .flatMap((m) =>
+        ),
+        (m) =>
           getIssuers(
             m,
             (issuer) => issuer && issuer.startsWith("consume-shared-module")
           )
-        )
-        .map(parseFederatedIssuer).filter(f => !!f),
-    })).filter(c => c.provides.length > 0);
+      )
+        .map(parseFederatedIssuer)
+        .filter((f) => !!f),
+    }))
+    .filter((c) => c.provides.length > 0);
 }
 
 /**
@@ -266,7 +280,7 @@ function getFederationStats(stats, federationPlugin) {
   const exposes = Object.entries(exposedModules).reduce(
     (exposedChunks, [exposedAs, exposedModules]) => {
       return Object.assign(exposedChunks, {
-        [exposedAs]: (exposedModules || []).flatMap((mod) => {
+        [exposedAs]: flatMap(exposedModules, (mod) => {
           return getExposed(stats, mod);
         }),
       });
@@ -284,7 +298,7 @@ function getFederationStats(stats, federationPlugin) {
 
   return {
     remote,
-    entry: `${stats.publicPath}${federationPlugin._options.filename}`,
+    entry: `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${federationPlugin._options.filename}`,
     sharedModules,
     exposes,
   };

@@ -266,7 +266,7 @@ function getFederationStats(stats, federationPlugin) {
   const exposes = Object.entries(exposedModules).reduce(
     (exposedChunks, [exposedAs, exposedModules]) => {
       return Object.assign(exposedChunks, {
-        [exposedAs]: exposedModules.flatMap((mod) => {
+        [exposedAs]: (exposedModules || []).flatMap((mod) => {
           return getExposed(stats, mod);
         }),
       });

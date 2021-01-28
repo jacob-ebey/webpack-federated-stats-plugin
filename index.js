@@ -135,7 +135,7 @@ function getIssuers(mod, check) {
  * @returns {SharedDependency}
  */
 function parseFederatedIssuer(issuer) {
-  const split = issuer.split("|");
+  const split = (issuer && issuer.split("|")) || [];
   if (split.length !== 8 || split[0] !== "consume-shared-module") {
     return null;
   }

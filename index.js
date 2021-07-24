@@ -93,7 +93,10 @@ function getExposed(stats, mod) {
 
   return {
     chunks: flatMap(chunks, (chunk) =>
-      chunk.files.map((f) => `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${f}`)
+      chunk.files.map(
+        (f) =>
+          `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${f}`
+      )
     ),
     sharedModules,
   };
@@ -194,7 +197,10 @@ function getSharedModules(stats, federationPlugin) {
       )
   )
     .map((chunk) => ({
-      chunks: chunk.files.map((f) => `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${f}`),
+      chunks: chunk.files.map(
+        (f) =>
+          `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${f}`
+      ),
       provides: flatMap(
         chunk.modules.filter((m) =>
           searchIssuer(
@@ -241,7 +247,10 @@ function getMainSharedModules(stats) {
     )
   )
     .map((chunk) => ({
-      chunks: chunk.files.map((f) => `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${f}`),
+      chunks: chunk.files.map(
+        (f) =>
+          `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${f}`
+      ),
       provides: flatMap(
         chunk.modules.filter((m) =>
           searchIssuer(
@@ -298,7 +307,9 @@ function getFederationStats(stats, federationPlugin) {
 
   return {
     remote,
-    entry: `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${federationPlugin._options.filename}`,
+    entry: `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${
+      federationPlugin._options.filename
+    }`,
     sharedModules,
     exposes,
   };
@@ -333,7 +344,9 @@ class FederationStatsPlugin {
     const federationPlugins =
       compiler.options.plugins &&
       compiler.options.plugins.filter(
-        (plugin) => plugin.constructor.name === "ModuleFederationPlugin"
+        (plugin) =>
+          plugin.constructor.name === "ModuleFederationPlugin" &&
+          plugin._options.exposes
       );
 
     if (!federationPlugins || federationPlugins.length === 0) {

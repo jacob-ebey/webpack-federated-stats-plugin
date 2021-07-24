@@ -350,7 +350,8 @@ class FederationStatsPlugin {
       );
 
     if (!federationPlugins || federationPlugins.length === 0) {
-      throw new Error("No ModuleFederationPlugin(s) found.");
+      console.error("No ModuleFederationPlugin(s) found.");
+      return;
     }
 
     compiler.hooks.thisCompilation.tap(PLUGIN_NAME, (compilation) => {

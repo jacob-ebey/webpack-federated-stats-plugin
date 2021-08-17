@@ -171,10 +171,14 @@ function parseFederatedIssuer(issuer) {
  */
 function getSharedModules(stats, federationPlugin) {
   return flatMap(
-    stats.chunks.filter((chunk) =>
-      stats.entrypoints[federationPlugin._options.name].chunks.some(
-        (id) => chunk.id === id
-      )
+    stats.chunks.filter((chunk) => {
+        if (!stats.entrypoints[federationPlugin._options.name]) {
+          return false;
+        }
+        return stats.entrypoints[federationPlugin._options.name].chunks.some(
+          (id) => chunk.id === id
+        );
+      }
     ),
     (chunk) =>
       flatMap(chunk.children, (id) =>

@@ -312,7 +312,10 @@ function getFederationStats(stats, federationPlugin) {
   return {
     remote,
     entry: `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${
-      federationPlugin._options.filename
+      stats.assetsByChunkName[remote] &&
+      stats.assetsByChunkName[remote].length === 1
+        ? stats.assetsByChunkName[remote][0]
+        : federationPlugin._options.filename
     }`,
     sharedModules,
     exposes,

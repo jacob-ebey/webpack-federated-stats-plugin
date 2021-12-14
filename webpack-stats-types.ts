@@ -346,3 +346,38 @@ export interface WebpackStatsEntrypoints {
   preactFrameworkExample: Main;
   main: Main;
 }
+
+export interface SharedDependency {
+  shareScope: string;
+  shareKey: string;
+  requiredVersion: string;
+  strictVersion: boolean;
+  singleton: boolean;
+  eager: boolean;
+}
+
+export interface SharedModule {
+  chunks: string[];
+  provides: SharedDependency[];
+}
+
+export interface Exposed {
+  chunks: string[];
+  sharedModules: SharedModule[];
+}
+
+export interface FederatedContainer {
+  remote: string;
+  entry: string;
+  sharedModules: SharedModule[];
+  exposes: Record<string, Exposed>;
+}
+
+export interface FederatedStats {
+  sharedModules: SharedModule[];
+  federatedModules: FederatedContainer[];
+}
+
+export interface FederationStatsPluginOptions {
+  filename: string; // The filename in the `output.path` directory to write stats to.
+}

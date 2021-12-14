@@ -2,45 +2,19 @@ const webpack = require("webpack");
 
 const PLUGIN_NAME = "FederationStatsPlugin";
 
+/** @typedef {import("webpack").Module} Module */
+/** @typedef {import("webpack").container.ModuleFederationPlugin} ModuleFederationPlugin */
+/** @typedef {import("webpack").Compiler} Compiler */
+
 /** @typedef {import("./webpack-stats-types").WebpackStats} WebpackStats */
 /** @typedef {import("./webpack-stats-types").WebpackStatsChunk} WebpackStatsChunk */
 /** @typedef {import("./webpack-stats-types").WebpackStatsModule} WebpackStatsModule */
-
-/**
- * @typedef {object} SharedDependency
- * @property {string} shareScope
- * @property {string} shareKey
- * @property {string} requiredVersion
- * @property {boolean} strictVersion
- * @property {boolean} singleton
- * @property {boolean} eager
- */
-
-/**
- * @typedef {object} SharedModule
- * @property {string[]} chunks
- * @property {SharedDependency[]} provides
- */
-
-/**
- * @typedef {object} Exposed
- * @property {string[]} chunks
- * @property {SharedModule[]} sharedModules
- */
-
-/**
- * @typedef {object} FederatedContainer
- * @property {string} remote
- * @property {string} entry
- * @property {SharedModule[]} sharedModules
- * @property {{ [key: string]: Exposed }} exposes
- */
-
-/**
- * @typedef {object} FederatedStats
- * @property {SharedModule[]} sharedModules
- * @property {FederatedContainer[]} federatedModules
- */
+/** @typedef {import("./webpack-stats-types").SharedDependency} SharedDependency */
+/** @typedef {import("./webpack-stats-types").SharedModule} SharedModule */
+/** @typedef {import("./webpack-stats-types").Exposed} Exposed */
+/** @typedef {import("./webpack-stats-types").FederatedContainer} FederatedContainer */
+/** @typedef {import("./webpack-stats-types").FederatedStats} FederatedStats */
+/** @typedef {import("./webpack-stats-types").FederationStatsPluginOptions} FederationStatsPluginOptions */
 
 const concat = (x, y) => x.concat(y);
 
@@ -104,7 +78,7 @@ function getExposed(stats, mod) {
 
 /**
  *
- * @param {import("webpack").Module} mod
+ * @param {Module} mod
  * @param {(issuer: string) => boolean} check
  * @returns {boolean}
  */
@@ -117,7 +91,7 @@ function searchIssuer(mod, check) {
 }
 
 /**
- * @param {import("webpack").Module} mod
+ * @param {Module} mod
  * @param {(issuer: string) => boolean} check
  * @returns {string[]}
  */
@@ -166,7 +140,7 @@ function parseFederatedIssuer(issuer) {
 /**
  *
  * @param {WebpackStats} stats
- * @param {import("webpack").container.ModuleFederationPlugin} federationPlugin
+ * @param {ModuleFederationPlugin} federationPlugin
  * @returns {SharedModule[]}
  */
 function getSharedModules(stats, federationPlugin) {
@@ -277,7 +251,7 @@ function getMainSharedModules(stats) {
 /**
  *
  * @param {WebpackStats} stats
- * @param {import("webpack").container.ModuleFederationPlugin} federationPlugin
+ * @param {ModuleFederationPlugin} federationPlugin
  * @returns {FederatedStats}
  */
 function getFederationStats(stats, federationPlugin) {
@@ -289,7 +263,7 @@ function getFederationStats(stats, federationPlugin) {
     });
   }, {});
 
-  /** @type {{ [key: string]: Exposed }} */
+  /** @type {Record<string, Exposed>} */
   const exposes = Object.entries(exposedModules).reduce(
     (exposedChunks, [exposedAs, exposedModules]) => {
       return Object.assign(exposedChunks, {
@@ -323,11 +297,6 @@ function getFederationStats(stats, federationPlugin) {
 }
 
 /**
- * @typedef {object} FederationStatsPluginOptions
- * @property {string} filename The filename in the `output.path` directory to write stats to.
- */
-
-/**
  * Writes relevant federation stats to a file for further consumption.
  */
 class FederationStatsPlugin {
@@ -345,7 +314,7 @@ class FederationStatsPlugin {
 
   /**
    *
-   * @param {import("webpack").Compiler} compiler
+   * @param {Compiler} compiler
    */
   apply(compiler) {
     const federationPlugins =

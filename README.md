@@ -79,6 +79,9 @@ module.exports = {
     {
       "remote": "preactFrameworkExample",
       "entry": "http://localhost:5000/client-bundle/routes.js",
+      "remoteModules": {
+        "otherRemote/exposedFile": 893
+      },
       "sharedModules": [
         {
           "chunks": [

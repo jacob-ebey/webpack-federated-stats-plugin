@@ -49,6 +49,20 @@ const flatMap = (xs, f) => xs.map(f).reduce(concat, []);
 /**
  *
  * @param {WebpackStats} stats
+ * @returns {}
+ */
+function getRemoteModules(stats) {
+  return stats.modules.filter((mod)=>{
+    return mod.moduleType === 'remote-module'
+  }).reduce((acc,remoteModule) => {
+     acc[remoteModule.nameForCondition] = remoteModule.id
+    return acc
+  },{})
+}
+
+/**
+ *
+ * @param {WebpackStats} stats
  * @param {string} exposedFile
  * @returns {WebpackStatsModule[]}
  */
@@ -308,7 +322,7 @@ function getFederationStats(stats, federationPlugin) {
     federationPlugin._options.name;
 
   const sharedModules = getSharedModules(stats, federationPlugin);
-
+  const remoteModules = getRemoteModules(stats);
   return {
     remote,
     entry: `${stats.publicPath !== "auto" ? stats.publicPath || "" : ""}${
@@ -319,6 +333,7 @@ function getFederationStats(stats, federationPlugin) {
     }`,
     sharedModules,
     exposes,
+    remoteModules,
   };
 }
 

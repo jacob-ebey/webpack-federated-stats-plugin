@@ -52,12 +52,14 @@ const flatMap = (xs, f) => xs.map(f).reduce(concat, []);
  * @returns {}
  */
 function getRemoteModules(stats) {
-  return stats.modules.filter((mod)=>{
-    return mod.moduleType === 'remote-module'
-  }).reduce((acc,remoteModule) => {
-     acc[remoteModule.nameForCondition] = remoteModule.id
-    return acc
-  },{})
+  return stats.modules
+    .filter((mod) => {
+      return mod.moduleType === "remote-module";
+    })
+    .reduce((acc, remoteModule) => {
+      acc[remoteModule.nameForCondition] = remoteModule.id;
+      return acc;
+    }, {});
 }
 
 /**
@@ -180,20 +182,19 @@ function parseFederatedIssuer(issuer) {
 /**
  *
  * @param {WebpackStats} stats
- * @param {import("webpack").container.ModuleFederationPlugin} federationPlugin
+ * @param {import("webpack").container.ModuleFederationPlugin} federationPluginOptions
  * @returns {SharedModule[]}
  */
-function getSharedModules(stats, federationPlugin) {
+function getSharedModules(stats, federationPluginOptions) {
   return flatMap(
     stats.chunks.filter((chunk) => {
-        if (!stats.entrypoints[federationPlugin._options.name]) {
-          return false;
-        }
-        return stats.entrypoints[federationPlugin._options.name].chunks.some(
-          (id) => chunk.id === id
-        );
+      if (!stats.entrypoints[federationPluginOptions.name]) {
+        return false;
       }
-    ),
+      return stats.entrypoints[federationPluginOptions.name].chunks.some(
+        (id) => chunk.id === id
+      );
+    }),
     (chunk) =>
       flatMap(chunk.children, (id) =>
         stats.chunks.filter(
@@ -201,7 +202,7 @@ function getSharedModules(stats, federationPlugin) {
             c.id === id &&
             c.files.length > 0 &&
             c.parents.some((p) =>
-              stats.entrypoints[federationPlugin._options.name].chunks.some(
+              stats.entrypoints[federationPluginOptions.name].chunks.some(
                 (c) => c === p
               )
             ) &&
@@ -291,17 +292,18 @@ function getMainSharedModules(stats) {
 /**
  *
  * @param {WebpackStats} stats
- * @param {import("webpack").container.ModuleFederationPlugin} federationPlugin
+ * @param {import("webpack").container.ModuleFederationPlugin} federationPluginOptions
  * @returns {FederatedStats}
  */
-function getFederationStats(stats, federationPlugin) {
-  const exposedModules = Object.entries(
-    federationPlugin._options.exposes
-  ).reduce((exposedModules, [exposedAs, exposedFile]) => {
-    return Object.assign(exposedModules, {
-      [exposedAs]: getExposedModules(stats, exposedFile),
-    });
-  }, {});
+function getFederationStats(stats, federationPluginOptions) {
+  const exposedModules = Object.entries(federationPluginOptions.exposes).reduce(
+    (exposedModules, [exposedAs, exposedFile]) => {
+      return Object.assign(exposedModules, {
+        [exposedAs]: getExposedModules(stats, exposedFile),
+      });
+    },
+    {}
+  );
 
   /** @type {{ [key: string]: Exposed }} */
   const exposes = Object.entries(exposedModules).reduce(
@@ -317,11 +319,10 @@ function getFederationStats(stats, federationPlugin) {
 
   /** @type {string} */
   const remote =
-    (federationPlugin._options.library &&
-      federationPlugin._options.library.name) ||
-    federationPlugin._options.name;
+    (federationPluginOptions.library && federationPluginOptions.library.name) ||
+    federationPluginOptions.name;
 
-  const sharedModules = getSharedModules(stats, federationPlugin);
+  const sharedModules = getSharedModules(stats, federationPluginOptions);
   const remoteModules = getRemoteModules(stats);
   return {
     remote,
@@ -329,13 +330,48 @@ function getFederationStats(stats, federationPlugin) {
       stats.assetsByChunkName[remote] &&
       stats.assetsByChunkName[remote].length === 1
         ? stats.assetsByChunkName[remote][0]
-        : federationPlugin._options.filename
+        : federationPluginOptions.filename
     }`,
     sharedModules,
     exposes,
     remoteModules,
   };
 }
+
+/**
+ * Supported plugins
+ */
+const SUPPORTED_PLUGINS = {
+  ModuleFederationPlugin: {
+    propOptions: "_options",
+  },
+  NodeFederationPlugin: {
+    propOptions: "options",
+  },
+  UniversalFederationPlugin: {
+    propOptions: "options",
+  },
+};
+
+/**
+ * @param {import("webpack").container.ModuleFederationPlugin} plugin
+ * @returns {boolean}
+ */
+const isSupportedPlugin = (plugin) => {
+  return Object.prototype.hasOwnProperty.call(
+    SUPPORTED_PLUGINS,
+    plugin.constructor.name
+  );
+};
+
+/**
+ * @param {import("webpack").container.ModuleFederationPlugin} plugin
+ * @returns {*}
+ */
+const getPluginOptions = (plugin) => {
+  const pluginConfig = SUPPORTED_PLUGINS[plugin.constructor.name];
+  return plugin[pluginConfig.propOptions];
+};
 
 /**
  * @typedef {object} FederationStatsPluginOptions
@@ -367,8 +403,7 @@ class FederationStatsPlugin {
       compiler.options.plugins &&
       compiler.options.plugins.filter(
         (plugin) =>
-          plugin.constructor.name === "ModuleFederationPlugin" &&
-          plugin._options.exposes
+          isSupportedPlugin(plugin) && getPluginOptions(plugin).exposes
       );
 
     if (!federationPlugins || federationPlugins.length === 0) {
@@ -386,7 +421,7 @@ class FederationStatsPlugin {
           const stats = compilation.getStats().toJson({});
 
           const federatedModules = federationPlugins.map((federationPlugin) =>
-            getFederationStats(stats, federationPlugin)
+            getFederationStats(stats, getPluginOptions(federationPlugin))
           );
 
           const sharedModules = getMainSharedModules(stats);
